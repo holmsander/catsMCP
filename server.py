@@ -1,8 +1,11 @@
 import os
+import contextlib
 from urllib.parse import quote
+
 import uvicorn
 from starlette.applications import Starlette
-from starlette.routing import Mount
+from starlette.routing import Mount, Route
+from starlette.responses import JSONResponse
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("cats")
@@ -15,9 +18,23 @@ def random_cat() -> str:
 def cat_says(text: str) -> str:
     return f"https://cataas.com/cat/says/{quote(text)}"
 
-app = Starlette(routes=[
-    Mount("/mcp", app=mcp.streamable_http_app())
-])
+# ✅ health check so Railway doesn't think it's dead
+async def root(request):
+    return JSONResponse({"ok": True})
+
+# ✅ REQUIRED for proper MCP HTTP handling
+@contextlib.asynccontextmanager
+async def lifespan(app):
+    async with mcp.session_manager.run():
+        yield
+
+app = Starlette(
+    routes=[
+        Route("/", root),  # important!
+        Mount("/mcp", app=mcp.streamable_http_app()),
+    ],
+    lifespan=lifespan,
+)
 
 if __name__ == "__main__":
     uvicorn.run(
