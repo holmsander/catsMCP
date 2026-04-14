@@ -1,6 +1,8 @@
 import os
 from urllib.parse import quote
 import uvicorn
+from starlette.applications import Starlette
+from starlette.routing import Mount
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("cats")
@@ -13,7 +15,9 @@ def random_cat() -> str:
 def cat_says(text: str) -> str:
     return f"https://cataas.com/cat/says/{quote(text)}"
 
-app = mcp.streamable_http_app()
+app = Starlette(routes=[
+    Mount("/mcp", app=mcp.streamable_http_app())
+])
 
 if __name__ == "__main__":
     uvicorn.run(
