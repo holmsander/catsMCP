@@ -1,47 +1,36 @@
 import os
-from fastmcp import FastMCP
 import httpx
+from fastmcp import FastMCP
 
 mcp = FastMCP(
     name="Cat MCP",
-    instructions=(
-        "Use the get_cat tool when the user asks for a cat picture. "
-        "Return the image URL and a short description."
-    ),
+    instructions="Use get_cat when the user asks for a cat picture.",
 )
 
-
 @mcp.tool()
-async def get_cat() -> dict:
-    """Get a random cat picture from cataas.com."""
+async def get_cat() -> str:
+    """Get a random cat image URL from cataas.com."""
     api_url = "https://cataas.com/cat?json=true"
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
         response = await client.get(api_url)
         response.raise_for_status()
         data = response.json()
 
-    # cataas usually returns a relative path like "/cat/abc123"
-    path = data.get("url") or data.get("_id")
+    raw_url = data.get("url")
+    cat_id = data.get("_id") or data.get("id")
 
-    if isinstance(path, str) and path.startswith("/"):
-        image_url = f"https://cataas.com{path}"
-    elif isinstance(path, str):
-        image_url = f"https://cataas.com/cat/{path}"
+    if isinstance(raw_url, str) and raw_url.startswith("http"):
+        image_url = raw_url
+    elif isinstance(raw_url, str) and raw_url.startswith("/"):
+        image_url = f"https://cataas.com{raw_url}"
+    elif isinstance(cat_id, str):
+        image_url = f"https://cataas.com/cat/{cat_id}"
     else:
         image_url = "https://cataas.com/cat"
 
-    tags = data.get("tags", [])
-
-    return {
-        "title": "Random cat",
-        "image_url": image_url,
-        "source": "https://cataas.com/",
-        "tags": tags,
-    }
-
+    return image_url
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
-    # Simple and matches OpenAI's MCP examples closely.
     mcp.run(transport="sse", host="0.0.0.0", port=port)
